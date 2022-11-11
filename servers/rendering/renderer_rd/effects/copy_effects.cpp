@@ -357,8 +357,8 @@ void CopyEffects::copy_to_rect(RID p_source_rd_texture, RID p_dest_texture, cons
 		copy.push_constant.flags |= COPY_FLAG_ALPHA_TO_ONE;
 	}
 
-	copy.push_constant.section[0] = 0;
-	copy.push_constant.section[1] = 0;
+	copy.push_constant.section[0] = p_rect.position.x;
+	copy.push_constant.section[1] = p_rect.position.y;
 	copy.push_constant.section[2] = p_rect.size.width;
 	copy.push_constant.section[3] = p_rect.size.height;
 	copy.push_constant.target[0] = p_rect.position.x;
@@ -1122,8 +1122,8 @@ void CopyEffects::cubemap_roughness_raster(RID p_source_rd_texture, RID p_dest_f
 	roughness.push_constant.use_direct_write = p_roughness == 0.0;
 	roughness.push_constant.face_size = p_size;
 
-	// setup our uniforms
-	RID default_sampler = material_storage->sampler_rd_get_default(RS::CANVAS_ITEM_TEXTURE_FILTER_LINEAR, RS::CANVAS_ITEM_TEXTURE_REPEAT_DISABLED);
+	// Setup our uniforms.
+	RID default_sampler = material_storage->sampler_rd_get_default(RS::CANVAS_ITEM_TEXTURE_FILTER_LINEAR_WITH_MIPMAPS, RS::CANVAS_ITEM_TEXTURE_REPEAT_DISABLED);
 
 	RD::Uniform u_source_rd_texture(RD::UNIFORM_TYPE_SAMPLER_WITH_TEXTURE, 0, Vector<RID>({ default_sampler, p_source_rd_texture }));
 
