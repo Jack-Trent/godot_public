@@ -1,32 +1,32 @@
-/*************************************************************************/
-/*  viewport.cpp                                                         */
-/*************************************************************************/
-/*                       This file is part of:                           */
-/*                           GODOT ENGINE                                */
-/*                      https://godotengine.org                          */
-/*************************************************************************/
-/* Copyright (c) 2007-2022 Juan Linietsky, Ariel Manzur.                 */
-/* Copyright (c) 2014-2022 Godot Engine contributors (cf. AUTHORS.md).   */
-/*                                                                       */
-/* Permission is hereby granted, free of charge, to any person obtaining */
-/* a copy of this software and associated documentation files (the       */
-/* "Software"), to deal in the Software without restriction, including   */
-/* without limitation the rights to use, copy, modify, merge, publish,   */
-/* distribute, sublicense, and/or sell copies of the Software, and to    */
-/* permit persons to whom the Software is furnished to do so, subject to */
-/* the following conditions:                                             */
-/*                                                                       */
-/* The above copyright notice and this permission notice shall be        */
-/* included in all copies or substantial portions of the Software.       */
-/*                                                                       */
-/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,       */
-/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF    */
-/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.*/
-/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY  */
-/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,  */
-/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE     */
-/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                */
-/*************************************************************************/
+/**************************************************************************/
+/*  viewport.cpp                                                          */
+/**************************************************************************/
+/*                         This file is part of:                          */
+/*                             GODOT ENGINE                               */
+/*                        https://godotengine.org                         */
+/**************************************************************************/
+/* Copyright (c) 2014-present Godot Engine contributors (see AUTHORS.md). */
+/* Copyright (c) 2007-2014 Juan Linietsky, Ariel Manzur.                  */
+/*                                                                        */
+/* Permission is hereby granted, free of charge, to any person obtaining  */
+/* a copy of this software and associated documentation files (the        */
+/* "Software"), to deal in the Software without restriction, including    */
+/* without limitation the rights to use, copy, modify, merge, publish,    */
+/* distribute, sublicense, and/or sell copies of the Software, and to     */
+/* permit persons to whom the Software is furnished to do so, subject to  */
+/* the following conditions:                                              */
+/*                                                                        */
+/* The above copyright notice and this permission notice shall be         */
+/* included in all copies or substantial portions of the Software.        */
+/*                                                                        */
+/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,        */
+/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF     */
+/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. */
+/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY   */
+/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,   */
+/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE      */
+/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
+/**************************************************************************/
 
 #include "viewport.h"
 
@@ -80,6 +80,7 @@ void ViewportTexture::setup_local_to_scene() {
 
 	vp->viewport_textures.insert(this);
 
+	ERR_FAIL_NULL(RenderingServer::get_singleton());
 	if (proxy_ph.is_valid()) {
 		RS::get_singleton()->texture_proxy_update(proxy, vp->texture_rid);
 		RS::get_singleton()->free(proxy_ph);
@@ -152,6 +153,8 @@ ViewportTexture::~ViewportTexture() {
 	if (vp) {
 		vp->viewport_textures.erase(this);
 	}
+
+	ERR_FAIL_NULL(RenderingServer::get_singleton());
 
 	if (proxy_ph.is_valid()) {
 		RS::get_singleton()->free(proxy_ph);
@@ -301,6 +304,8 @@ void Viewport::_sub_window_remove(Window *p_window) {
 	int index = _sub_window_find(p_window);
 	ERR_FAIL_COND(index == -1);
 
+	ERR_FAIL_NULL(RenderingServer::get_singleton());
+
 	RS::get_singleton()->free(gui.sub_windows[index].canvas_item);
 	gui.sub_windows.remove_at(index);
 
@@ -362,6 +367,7 @@ void Viewport::_notification(int p_what) {
 
 			current_canvas = find_world_2d()->get_canvas();
 			RenderingServer::get_singleton()->viewport_attach_canvas(viewport, current_canvas);
+			RenderingServer::get_singleton()->viewport_set_canvas_transform(viewport, current_canvas, canvas_transform);
 			RenderingServer::get_singleton()->viewport_set_canvas_cull_mask(viewport, canvas_cull_mask);
 			_update_audio_listener_2d();
 #ifndef _3D_DISABLED
@@ -491,6 +497,7 @@ void Viewport::_notification(int p_what) {
 		} break;
 
 		case NOTIFICATION_WM_WINDOW_FOCUS_OUT: {
+			_gui_cancel_tooltip();
 			_drop_physics_mouseover();
 			if (gui.mouse_focus && !gui.forced_mouse_focus) {
 				_drop_mouse_focus();
@@ -596,9 +603,9 @@ void Viewport::_process_picking() {
 			physics_last_mouse_state.meta = mb->is_meta_pressed();
 
 			if (mb->is_pressed()) {
-				physics_last_mouse_state.mouse_mask |= mouse_button_to_mask(mb->get_button_index());
+				physics_last_mouse_state.mouse_mask.set_flag(mouse_button_to_mask(mb->get_button_index()));
 			} else {
-				physics_last_mouse_state.mouse_mask &= ~mouse_button_to_mask(mb->get_button_index());
+				physics_last_mouse_state.mouse_mask.clear_flag(mouse_button_to_mask(mb->get_button_index()));
 
 				// If touch mouse raised, assume we don't know last mouse pos until new events come
 				if (mb->get_device() == InputEvent::DEVICE_ID_TOUCH_MOUSE) {
@@ -640,7 +647,7 @@ void Viewport::_process_picking() {
 				ObjectID canvas_layer_id;
 				if (E) {
 					// A descendant CanvasLayer.
-					canvas_layer_transform = E->get_transform();
+					canvas_layer_transform = E->get_final_transform();
 					canvas_layer_id = E->get_instance_id();
 				} else {
 					// This Viewport's builtin canvas.
@@ -1249,6 +1256,7 @@ void Viewport::_gui_show_tooltip() {
 	panel->set_transient(true);
 	panel->set_flag(Window::FLAG_NO_FOCUS, true);
 	panel->set_flag(Window::FLAG_POPUP, false);
+	panel->set_flag(Window::FLAG_MOUSE_PASSTHROUGH, true);
 	panel->set_wrap_controls(true);
 	panel->add_child(base_tooltip);
 	panel->gui_parent = this;
@@ -1291,7 +1299,6 @@ void Viewport::_gui_show_tooltip() {
 		r.position.y = vr.position.y;
 	}
 
-	gui.tooltip_popup->set_current_screen(window->get_current_screen());
 	gui.tooltip_popup->set_position(r.position);
 	gui.tooltip_popup->set_size(r.size);
 
@@ -1395,7 +1402,7 @@ Control *Viewport::gui_find_control(const Point2 &p_global) {
 			xform = sw->get_canvas_transform();
 		}
 
-		Control *ret = _gui_find_control_at_pos(sw, p_global, xform, gui.focus_inv_xform);
+		Control *ret = _gui_find_control_at_pos(sw, p_global, xform);
 		if (ret) {
 			return ret;
 		}
@@ -1404,7 +1411,7 @@ Control *Viewport::gui_find_control(const Point2 &p_global) {
 	return nullptr;
 }
 
-Control *Viewport::_gui_find_control_at_pos(CanvasItem *p_node, const Point2 &p_global, const Transform2D &p_xform, Transform2D &r_inv_xform) {
+Control *Viewport::_gui_find_control_at_pos(CanvasItem *p_node, const Point2 &p_global, const Transform2D &p_xform) {
 	if (!p_node->is_visible()) {
 		return nullptr; // Canvas item hidden, discard.
 	}
@@ -1424,7 +1431,7 @@ Control *Viewport::_gui_find_control_at_pos(CanvasItem *p_node, const Point2 &p_
 				continue;
 			}
 
-			Control *ret = _gui_find_control_at_pos(ci, p_global, matrix, r_inv_xform);
+			Control *ret = _gui_find_control_at_pos(ci, p_global, matrix);
 			if (ret) {
 				return ret;
 			}
@@ -1442,7 +1449,6 @@ Control *Viewport::_gui_find_control_at_pos(CanvasItem *p_node, const Point2 &p_
 
 	Control *drag_preview = _gui_get_drag_preview();
 	if (!drag_preview || (c != drag_preview && !drag_preview->is_ancestor_of(c))) {
-		r_inv_xform = matrix;
 		return c;
 	}
 
@@ -1489,20 +1495,20 @@ void Viewport::_gui_input_event(Ref<InputEvent> p_event) {
 
 		Point2 mpos = mb->get_position();
 		if (mb->is_pressed()) {
-			Size2 pos = mpos;
-			if (gui.mouse_focus_mask != MouseButton::NONE) {
+			if (!gui.mouse_focus_mask.is_empty()) {
 				// Do not steal mouse focus and stuff while a focus mask exists.
-				gui.mouse_focus_mask |= mouse_button_to_mask(mb->get_button_index());
+				gui.mouse_focus_mask.set_flag(mouse_button_to_mask(mb->get_button_index()));
 			} else {
-				gui.mouse_focus = gui_find_control(pos);
+				gui.mouse_focus = gui_find_control(mpos);
 				gui.last_mouse_focus = gui.mouse_focus;
 
 				if (!gui.mouse_focus) {
-					gui.mouse_focus_mask = MouseButton::NONE;
+					gui.mouse_focus_mask.clear();
 					return;
 				}
 
-				gui.mouse_focus_mask = mouse_button_to_mask(mb->get_button_index());
+				gui.mouse_focus_mask.clear();
+				gui.mouse_focus_mask.set_flag(mouse_button_to_mask(mb->get_button_index()));
 
 				if (mb->get_button_index() == MouseButton::LEFT) {
 					gui.drag_accum = Vector2();
@@ -1512,10 +1518,7 @@ void Viewport::_gui_input_event(Ref<InputEvent> p_event) {
 
 			mb = mb->xformed_by(Transform2D()); // Make a copy of the event.
 
-			mb->set_global_position(pos);
-
-			pos = gui.focus_inv_xform.xform(pos);
-
+			Point2 pos = gui.mouse_focus->get_global_transform_with_canvas().affine_inverse().xform(mpos);
 			mb->set_position(pos);
 
 #ifdef DEBUG_ENABLED
@@ -1561,58 +1564,26 @@ void Viewport::_gui_input_event(Ref<InputEvent> p_event) {
 				set_input_as_handled();
 			}
 
-			if (gui.drag_data.get_type() != Variant::NIL && mb->get_button_index() == MouseButton::LEFT) {
+			if (gui.dragging && mb->get_button_index() == MouseButton::LEFT) {
 				// Alternate drop use (when using force_drag(), as proposed by #5342).
-				gui.drag_successful = false;
-				if (gui.mouse_focus) {
-					gui.drag_successful = _gui_drop(gui.mouse_focus, pos, false);
-				}
-
-				gui.drag_data = Variant();
-				gui.dragging = false;
-
-				Control *drag_preview = _gui_get_drag_preview();
-				if (drag_preview) {
-					memdelete(drag_preview);
-					gui.drag_preview_id = ObjectID();
-				}
-				_propagate_viewport_notification(this, NOTIFICATION_DRAG_END);
-				get_base_window()->update_mouse_cursor_shape();
+				_perform_drop(gui.mouse_focus, pos);
 			}
 
 			_gui_cancel_tooltip();
 		} else {
-			if (gui.drag_data.get_type() != Variant::NIL && mb->get_button_index() == MouseButton::LEFT) {
-				gui.drag_successful = false;
-				if (gui.drag_mouse_over) {
-					gui.drag_successful = _gui_drop(gui.drag_mouse_over, gui.drag_mouse_over_pos, false);
-				}
-
-				Control *drag_preview = _gui_get_drag_preview();
-				if (drag_preview) {
-					memdelete(drag_preview);
-					gui.drag_preview_id = ObjectID();
-				}
-
-				gui.drag_data = Variant();
-				gui.dragging = false;
-				gui.drag_mouse_over = nullptr;
-				_propagate_viewport_notification(this, NOTIFICATION_DRAG_END);
-				get_base_window()->update_mouse_cursor_shape();
+			if (gui.dragging && mb->get_button_index() == MouseButton::LEFT) {
+				_perform_drop(gui.drag_mouse_over, gui.drag_mouse_over_pos);
 			}
 
-			gui.mouse_focus_mask &= ~mouse_button_to_mask(mb->get_button_index()); // Remove from mask.
+			gui.mouse_focus_mask.clear_flag(mouse_button_to_mask(mb->get_button_index())); // Remove from mask.
 
 			if (!gui.mouse_focus) {
 				// Release event is only sent if a mouse focus (previously pressed button) exists.
 				return;
 			}
 
-			Size2 pos = mpos;
-
 			mb = mb->xformed_by(Transform2D()); // Make a copy.
-			mb->set_global_position(pos);
-			pos = gui.focus_inv_xform.xform(pos);
+			Point2 pos = gui.mouse_focus->get_global_transform_with_canvas().affine_inverse().xform(mpos);
 			mb->set_position(pos);
 
 			Control *mouse_focus = gui.mouse_focus;
@@ -1620,7 +1591,7 @@ void Viewport::_gui_input_event(Ref<InputEvent> p_event) {
 			// Disable mouse focus if needed before calling input,
 			// this makes popups on mouse press event work better,
 			// as the release will never be received otherwise.
-			if (gui.mouse_focus_mask == MouseButton::NONE) {
+			if (gui.mouse_focus_mask.is_empty()) {
 				gui.mouse_focus = nullptr;
 				gui.forced_mouse_focus = false;
 			}
@@ -1642,7 +1613,7 @@ void Viewport::_gui_input_event(Ref<InputEvent> p_event) {
 		Point2 mpos = mm->get_position();
 
 		// Drag & drop.
-		if (!gui.drag_attempted && gui.mouse_focus && (mm->get_button_mask() & MouseButton::MASK_LEFT) != MouseButton::NONE) {
+		if (!gui.drag_attempted && gui.mouse_focus && (mm->get_button_mask().has_flag(MouseButtonMask::LEFT))) {
 			gui.drag_accum += mm->get_relative();
 			float len = gui.drag_accum.length();
 			if (len > 10) {
@@ -1652,11 +1623,11 @@ void Viewport::_gui_input_event(Ref<InputEvent> p_event) {
 						Control *control = Object::cast_to<Control>(ci);
 						if (control) {
 							gui.dragging = true;
-							gui.drag_data = control->get_drag_data(control->get_global_transform_with_canvas().affine_inverse().xform(mpos) - gui.drag_accum);
+							gui.drag_data = control->get_drag_data(control->get_global_transform_with_canvas().affine_inverse().xform(mpos - gui.drag_accum));
 							if (gui.drag_data.get_type() != Variant::NIL) {
 								gui.mouse_focus = nullptr;
 								gui.forced_mouse_focus = false;
-								gui.mouse_focus_mask = MouseButton::NONE;
+								gui.mouse_focus_mask.clear();
 								break;
 							} else {
 								Control *drag_preview = _gui_get_drag_preview();
@@ -1682,7 +1653,7 @@ void Viewport::_gui_input_event(Ref<InputEvent> p_event) {
 				}
 
 				gui.drag_attempted = true;
-				if (gui.drag_data.get_type() != Variant::NIL) {
+				if (gui.dragging) {
 					_propagate_viewport_notification(this, NOTIFICATION_DRAG_BEGIN);
 				}
 			}
@@ -1698,6 +1669,9 @@ void Viewport::_gui_input_event(Ref<InputEvent> p_event) {
 			_gui_cancel_tooltip();
 
 			if (over) {
+				if (!gui.mouse_over) {
+					_drop_physics_mouseover();
+				}
 				_gui_call_notification(over, Control::NOTIFICATION_MOUSE_ENTER);
 				gui.mouse_over = over;
 			}
@@ -1721,7 +1695,7 @@ void Viewport::_gui_input_event(Ref<InputEvent> p_event) {
 			mm->set_velocity(velocity);
 			mm->set_relative(rel);
 
-			if (mm->get_button_mask() == MouseButton::NONE) {
+			if (mm->get_button_mask().is_empty()) {
 				// Nothing pressed.
 
 				bool is_tooltip_shown = false;
@@ -1764,7 +1738,7 @@ void Viewport::_gui_input_event(Ref<InputEvent> p_event) {
 				Control *c = over;
 				Vector2 cpos = pos;
 				while (c) {
-					if (gui.mouse_focus_mask != MouseButton::NONE || c->has_point(cpos)) {
+					if (!gui.mouse_focus_mask.is_empty() || c->has_point(cpos)) {
 						cursor_shape = c->get_cursor_shape(cpos);
 					} else {
 						cursor_shape = Control::CURSOR_ARROW;
@@ -1795,7 +1769,7 @@ void Viewport::_gui_input_event(Ref<InputEvent> p_event) {
 			}
 		}
 
-		if (gui.drag_data.get_type() != Variant::NIL) {
+		if (gui.dragging) {
 			// Handle drag & drop.
 
 			Control *drag_preview = _gui_get_drag_preview();
@@ -1904,17 +1878,15 @@ void Viewport::_gui_input_event(Ref<InputEvent> p_event) {
 	Ref<InputEventScreenTouch> touch_event = p_event;
 	if (touch_event.is_valid()) {
 		Size2 pos = touch_event->get_position();
+		const int touch_index = touch_event->get_index();
 		if (touch_event->is_pressed()) {
 			Control *over = gui_find_control(pos);
 			if (over) {
+				gui.touch_focus[touch_index] = over->get_instance_id();
 				bool stopped = false;
 				if (over->can_process()) {
 					touch_event = touch_event->xformed_by(Transform2D()); // Make a copy.
-					if (over == gui.mouse_focus) {
-						pos = gui.focus_inv_xform.xform(pos);
-					} else {
-						pos = over->get_global_transform_with_canvas().affine_inverse().xform(pos);
-					}
+					pos = over->get_global_transform_with_canvas().affine_inverse().xform(pos);
 					touch_event->set_position(pos);
 					stopped = _gui_call_input(over, touch_event);
 				}
@@ -1923,17 +1895,21 @@ void Viewport::_gui_input_event(Ref<InputEvent> p_event) {
 				}
 				return;
 			}
-		} else if (touch_event->get_index() == 0 && gui.last_mouse_focus) {
+		} else {
 			bool stopped = false;
-			if (gui.last_mouse_focus->can_process()) {
+			ObjectID control_id = gui.touch_focus[touch_index];
+			Control *over = control_id.is_valid() ? Object::cast_to<Control>(ObjectDB::get_instance(control_id)) : nullptr;
+			if (over && over->can_process()) {
 				touch_event = touch_event->xformed_by(Transform2D()); // Make a copy.
-				touch_event->set_position(gui.focus_inv_xform.xform(pos));
+				pos = gui.last_mouse_focus->get_global_transform_with_canvas().affine_inverse().xform(pos);
+				touch_event->set_position(pos);
 
-				stopped = _gui_call_input(gui.last_mouse_focus, touch_event);
+				stopped = _gui_call_input(over, touch_event);
 			}
 			if (stopped) {
 				set_input_as_handled();
 			}
+			gui.touch_focus.erase(touch_index);
 			return;
 		}
 	}
@@ -1951,11 +1927,7 @@ void Viewport::_gui_input_event(Ref<InputEvent> p_event) {
 			bool stopped = false;
 			if (over->can_process()) {
 				gesture_event = gesture_event->xformed_by(Transform2D()); // Make a copy.
-				if (over == gui.mouse_focus) {
-					pos = gui.focus_inv_xform.xform(pos);
-				} else {
-					pos = over->get_global_transform_with_canvas().affine_inverse().xform(pos);
-				}
+				pos = over->get_global_transform_with_canvas().affine_inverse().xform(pos);
 				gesture_event->set_position(pos);
 				stopped = _gui_call_input(over, gesture_event);
 			}
@@ -1968,7 +1940,9 @@ void Viewport::_gui_input_event(Ref<InputEvent> p_event) {
 
 	Ref<InputEventScreenDrag> drag_event = p_event;
 	if (drag_event.is_valid()) {
-		Control *over = gui.mouse_focus;
+		const int drag_event_index = drag_event->get_index();
+		ObjectID control_id = gui.touch_focus[drag_event_index];
+		Control *over = control_id.is_valid() ? Object::cast_to<Control>(ObjectDB::get_instance(control_id)) : nullptr;
 		if (!over) {
 			over = gui_find_control(drag_event->get_position());
 		}
@@ -1997,6 +1971,12 @@ void Viewport::_gui_input_event(Ref<InputEvent> p_event) {
 	}
 
 	if (mm.is_null() && mb.is_null() && p_event->is_action_type()) {
+		if (gui.dragging && p_event->is_action_pressed("ui_cancel") && Input::get_singleton()->is_action_just_pressed("ui_cancel")) {
+			_perform_drop();
+			set_input_as_handled();
+			return;
+		}
+
 		if (gui.key_focus && !gui.key_focus->is_visible_in_tree()) {
 			gui.key_focus->release_focus();
 		}
@@ -2078,13 +2058,34 @@ void Viewport::_gui_input_event(Ref<InputEvent> p_event) {
 	}
 }
 
+void Viewport::_perform_drop(Control *p_control, Point2 p_pos) {
+	// Without any arguments, simply cancel Drag and Drop.
+	if (p_control) {
+		gui.drag_successful = _gui_drop(p_control, p_pos, false);
+	} else {
+		gui.drag_successful = false;
+	}
+
+	Control *drag_preview = _gui_get_drag_preview();
+	if (drag_preview) {
+		memdelete(drag_preview);
+		gui.drag_preview_id = ObjectID();
+	}
+
+	gui.drag_data = Variant();
+	gui.dragging = false;
+	gui.drag_mouse_over = nullptr;
+	_propagate_viewport_notification(this, NOTIFICATION_DRAG_END);
+	get_base_window()->update_mouse_cursor_shape();
+}
+
 void Viewport::_gui_cleanup_internal_state(Ref<InputEvent> p_event) {
 	ERR_FAIL_COND(p_event.is_null());
 
 	Ref<InputEventMouseButton> mb = p_event;
 	if (mb.is_valid()) {
 		if (!mb->is_pressed()) {
-			gui.mouse_focus_mask &= ~mouse_button_to_mask(mb->get_button_index()); // Remove from mask.
+			gui.mouse_focus_mask.clear_flag(mouse_button_to_mask(mb->get_button_index())); // Remove from mask.
 		}
 	}
 }
@@ -2094,7 +2095,7 @@ List<Control *>::Element *Viewport::_gui_add_root_control(Control *p_control) {
 	return gui.roots.push_back(p_control);
 }
 
-void Viewport::_gui_set_root_order_dirty() {
+void Viewport::gui_set_root_order_dirty() {
 	gui.roots_order_dirty = true;
 }
 
@@ -2175,7 +2176,7 @@ void Viewport::_gui_remove_control(Control *p_control) {
 	if (gui.mouse_focus == p_control) {
 		gui.mouse_focus = nullptr;
 		gui.forced_mouse_focus = false;
-		gui.mouse_focus_mask = MouseButton::NONE;
+		gui.mouse_focus_mask.clear();
 	}
 	if (gui.last_mouse_focus == p_control) {
 		gui.last_mouse_focus = nullptr;
@@ -2244,10 +2245,10 @@ void Viewport::_drop_mouse_over() {
 
 void Viewport::_drop_mouse_focus() {
 	Control *c = gui.mouse_focus;
-	MouseButton mask = gui.mouse_focus_mask;
+	BitField<MouseButtonMask> mask = gui.mouse_focus_mask;
 	gui.mouse_focus = nullptr;
 	gui.forced_mouse_focus = false;
-	gui.mouse_focus_mask = MouseButton::NONE;
+	gui.mouse_focus_mask.clear();
 
 	for (int i = 0; i < 3; i++) {
 		if ((int)mask & (1 << i)) {
@@ -2355,7 +2356,7 @@ void Viewport::_post_gui_grab_click_focus() {
 			return;
 		}
 
-		MouseButton mask = gui.mouse_focus_mask;
+		BitField<MouseButtonMask> mask = gui.mouse_focus_mask;
 		Point2 click = gui.mouse_focus->get_global_transform_with_canvas().affine_inverse().xform(gui.last_mouse_pos);
 
 		for (int i = 0; i < 3; i++) {
@@ -2373,7 +2374,6 @@ void Viewport::_post_gui_grab_click_focus() {
 		}
 
 		gui.mouse_focus = focus_grabber;
-		gui.focus_inv_xform = gui.mouse_focus->get_global_transform_with_canvas().affine_inverse();
 		click = gui.mouse_focus->get_global_transform_with_canvas().affine_inverse().xform(gui.last_mouse_pos);
 
 		for (int i = 0; i < 3; i++) {
@@ -2662,6 +2662,11 @@ bool Viewport::_sub_windows_forward_input(const Ref<InputEvent> &p_event) {
 				} else {
 					gui.subwindow_resize_mode = _sub_window_get_resize_margin(sw.window, mb->get_position());
 					if (gui.subwindow_resize_mode != SUB_WINDOW_RESIZE_DISABLED) {
+						if (gui.subwindow_focused != sw.window) {
+							// Refocus.
+							_sub_window_grab_focus(sw.window);
+						}
+
 						gui.subwindow_resize_from_rect = r;
 						gui.subwindow_drag_from = mb->get_position();
 						gui.subwindow_drag = SUB_WINDOW_DRAG_RESIZE;
@@ -3041,8 +3046,6 @@ bool Viewport::gui_is_drag_successful() const {
 }
 
 void Viewport::set_input_as_handled() {
-	_drop_physics_mouseover();
-
 	if (!handle_input_locally) {
 		ERR_FAIL_COND(!is_inside_tree());
 		Viewport *vp = this;
@@ -3217,7 +3220,7 @@ void Viewport::pass_mouse_focus_to(Viewport *p_viewport, Control *p_control) {
 
 		gui.mouse_focus = nullptr;
 		gui.forced_mouse_focus = false;
-		gui.mouse_focus_mask = MouseButton::NONE;
+		gui.mouse_focus_mask.clear();
 	}
 }
 
@@ -4081,8 +4084,7 @@ Viewport::Viewport() {
 	unhandled_key_input_group = "_vp_unhandled_key_input" + id;
 
 	// Window tooltip.
-	gui.tooltip_delay = GLOBAL_DEF("gui/timers/tooltip_delay_sec", 0.5);
-	ProjectSettings::get_singleton()->set_custom_property_info("gui/timers/tooltip_delay_sec", PropertyInfo(Variant::FLOAT, "gui/timers/tooltip_delay_sec", PROPERTY_HINT_RANGE, "0,5,0.01,or_greater")); // No negative numbers
+	gui.tooltip_delay = GLOBAL_DEF(PropertyInfo(Variant::FLOAT, "gui/timers/tooltip_delay_sec", PROPERTY_HINT_RANGE, "0,5,0.01,or_greater"), 0.5);
 
 #ifndef _3D_DISABLED
 	set_scaling_3d_mode((Viewport::Scaling3DMode)(int)GLOBAL_GET("rendering/scaling_3d/mode"));
@@ -4099,6 +4101,7 @@ Viewport::~Viewport() {
 	for (ViewportTexture *E : viewport_textures) {
 		E->vp = nullptr;
 	}
+	ERR_FAIL_NULL(RenderingServer::get_singleton());
 	RenderingServer::get_singleton()->free(viewport);
 }
 
@@ -4161,7 +4164,7 @@ DisplayServer::WindowID SubViewport::get_window_id() const {
 }
 
 Transform2D SubViewport::_stretch_transform() {
-	Transform2D transform = Transform2D();
+	Transform2D transform;
 	Size2i view_size_2d_override = _get_size_2d_override();
 	if (size_2d_override_stretch && view_size_2d_override.width > 0 && view_size_2d_override.height > 0) {
 		Size2 scale = Size2(_get_size()) / Size2(view_size_2d_override);
@@ -4172,7 +4175,7 @@ Transform2D SubViewport::_stretch_transform() {
 }
 
 Transform2D SubViewport::get_screen_transform() const {
-	Transform2D container_transform = Transform2D();
+	Transform2D container_transform;
 	SubViewportContainer *c = Object::cast_to<SubViewportContainer>(get_parent());
 	if (c) {
 		if (c->is_stretch_enabled()) {

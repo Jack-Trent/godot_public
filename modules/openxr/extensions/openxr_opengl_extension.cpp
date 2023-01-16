@@ -1,32 +1,32 @@
-/*************************************************************************/
-/*  openxr_opengl_extension.cpp                                          */
-/*************************************************************************/
-/*                       This file is part of:                           */
-/*                           GODOT ENGINE                                */
-/*                      https://godotengine.org                          */
-/*************************************************************************/
-/* Copyright (c) 2007-2022 Juan Linietsky, Ariel Manzur.                 */
-/* Copyright (c) 2014-2022 Godot Engine contributors (cf. AUTHORS.md).   */
-/*                                                                       */
-/* Permission is hereby granted, free of charge, to any person obtaining */
-/* a copy of this software and associated documentation files (the       */
-/* "Software"), to deal in the Software without restriction, including   */
-/* without limitation the rights to use, copy, modify, merge, publish,   */
-/* distribute, sublicense, and/or sell copies of the Software, and to    */
-/* permit persons to whom the Software is furnished to do so, subject to */
-/* the following conditions:                                             */
-/*                                                                       */
-/* The above copyright notice and this permission notice shall be        */
-/* included in all copies or substantial portions of the Software.       */
-/*                                                                       */
-/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,       */
-/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF    */
-/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.*/
-/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY  */
-/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,  */
-/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE     */
-/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                */
-/*************************************************************************/
+/**************************************************************************/
+/*  openxr_opengl_extension.cpp                                           */
+/**************************************************************************/
+/*                         This file is part of:                          */
+/*                             GODOT ENGINE                               */
+/*                        https://godotengine.org                         */
+/**************************************************************************/
+/* Copyright (c) 2014-present Godot Engine contributors (see AUTHORS.md). */
+/* Copyright (c) 2007-2014 Juan Linietsky, Ariel Manzur.                  */
+/*                                                                        */
+/* Permission is hereby granted, free of charge, to any person obtaining  */
+/* a copy of this software and associated documentation files (the        */
+/* "Software"), to deal in the Software without restriction, including    */
+/* without limitation the rights to use, copy, modify, merge, publish,    */
+/* distribute, sublicense, and/or sell copies of the Software, and to     */
+/* permit persons to whom the Software is furnished to do so, subject to  */
+/* the following conditions:                                              */
+/*                                                                        */
+/* The above copyright notice and this permission notice shall be         */
+/* included in all copies or substantial portions of the Software.        */
+/*                                                                        */
+/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,        */
+/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF     */
+/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. */
+/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY   */
+/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,   */
+/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE      */
+/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
+/**************************************************************************/
 
 #ifdef GLES3_ENABLED
 
@@ -37,24 +37,21 @@
 #include "servers/rendering/rendering_server_globals.h"
 #include "servers/rendering_server.h"
 
-OpenXROpenGLExtension::OpenXROpenGLExtension(OpenXRAPI *p_openxr_api) :
-		OpenXRGraphicsExtensionWrapper(p_openxr_api) {
+HashMap<String, bool *> OpenXROpenGLExtension::get_requested_extensions() {
+	HashMap<String, bool *> request_extensions;
+
 #ifdef ANDROID_ENABLED
 	request_extensions[XR_KHR_OPENGL_ES_ENABLE_EXTENSION_NAME] = nullptr;
 #else
 	request_extensions[XR_KHR_OPENGL_ENABLE_EXTENSION_NAME] = nullptr;
 #endif
 
-	ERR_FAIL_NULL(openxr_api);
-}
-
-OpenXROpenGLExtension::~OpenXROpenGLExtension() {
+	return request_extensions;
 }
 
 void OpenXROpenGLExtension::on_instance_created(const XrInstance p_instance) {
-	ERR_FAIL_NULL(openxr_api);
-
 	// Obtain pointers to functions we're accessing here.
+	ERR_FAIL_NULL(OpenXRAPI::get_singleton());
 
 #ifdef ANDROID_ENABLED
 	EXT_INIT_XR_FUNC(xrGetOpenGLESGraphicsRequirementsKHR);
@@ -65,10 +62,10 @@ void OpenXROpenGLExtension::on_instance_created(const XrInstance p_instance) {
 }
 
 bool OpenXROpenGLExtension::check_graphics_api_support(XrVersion p_desired_version) {
-	ERR_FAIL_NULL_V(openxr_api, false);
+	ERR_FAIL_NULL_V(OpenXRAPI::get_singleton(), false);
 
-	XrSystemId system_id = openxr_api->get_system_id();
-	XrInstance instance = openxr_api->get_instance();
+	XrSystemId system_id = OpenXRAPI::get_singleton()->get_system_id();
+	XrInstance instance = OpenXRAPI::get_singleton()->get_instance();
 
 #ifdef ANDROID_ENABLED
 	XrGraphicsRequirementsOpenGLESKHR opengl_requirements;
@@ -76,7 +73,7 @@ bool OpenXROpenGLExtension::check_graphics_api_support(XrVersion p_desired_versi
 	opengl_requirements.next = nullptr;
 
 	XrResult result = xrGetOpenGLESGraphicsRequirementsKHR(instance, system_id, &opengl_requirements);
-	if (!openxr_api->xr_result(result, "Failed to get OpenGL graphics requirements!")) {
+	if (!OpenXRAPI::get_singleton()->xr_result(result, "Failed to get OpenGL graphics requirements!")) {
 		return false;
 	}
 #else
@@ -85,7 +82,7 @@ bool OpenXROpenGLExtension::check_graphics_api_support(XrVersion p_desired_versi
 	opengl_requirements.next = nullptr;
 
 	XrResult result = xrGetOpenGLGraphicsRequirementsKHR(instance, system_id, &opengl_requirements);
-	if (!openxr_api->xr_result(result, "Failed to get OpenGL graphics requirements!")) {
+	if (!OpenXRAPI::get_singleton()->xr_result(result, "Failed to get OpenGL graphics requirements!")) {
 		return false;
 	}
 #endif
@@ -136,9 +133,9 @@ void *OpenXROpenGLExtension::set_session_create_and_get_next_pointer(void *p_nex
 	graphics_binding_gl.type = XR_TYPE_GRAPHICS_BINDING_OPENGL_ES_ANDROID_KHR;
 	graphics_binding_gl.next = p_next_pointer;
 
-	graphics_binding_gl.display = eglGetCurrentDisplay();
+	graphics_binding_gl.display = (void *)display_server->window_get_native_handle(DisplayServer::DISPLAY_HANDLE);
 	graphics_binding_gl.config = (EGLConfig)0; // https://github.com/KhronosGroup/OpenXR-SDK-Source/blob/master/src/tests/hello_xr/graphicsplugin_opengles.cpp#L122
-	graphics_binding_gl.context = eglGetCurrentContext();
+	graphics_binding_gl.context = (void *)display_server->window_get_native_handle(DisplayServer::OPENGL_CONTEXT);
 #else
 	graphics_binding_gl.type = XR_TYPE_GRAPHICS_BINDING_OPENGL_XLIB_KHR;
 	graphics_binding_gl.next = p_next_pointer;
@@ -160,16 +157,7 @@ void *OpenXROpenGLExtension::set_session_create_and_get_next_pointer(void *p_nex
 }
 
 void OpenXROpenGLExtension::get_usable_swapchain_formats(Vector<int64_t> &p_usable_swap_chains) {
-#ifdef WIN32
-	p_usable_swap_chains.push_back(GL_SRGB8_ALPHA8);
 	p_usable_swap_chains.push_back(GL_RGBA8);
-#elif ANDROID_ENABLED
-	p_usable_swap_chains.push_back(GL_SRGB8_ALPHA8);
-	p_usable_swap_chains.push_back(GL_RGBA8);
-#else
-	p_usable_swap_chains.push_back(GL_SRGB8_ALPHA8_EXT);
-	p_usable_swap_chains.push_back(GL_RGBA8_EXT);
-#endif
 }
 
 void OpenXROpenGLExtension::get_usable_depth_formats(Vector<int64_t> &p_usable_depth_formats) {
@@ -185,7 +173,7 @@ bool OpenXROpenGLExtension::get_swapchain_image_data(XrSwapchain p_swapchain, in
 	uint32_t swapchain_length;
 	XrResult result = xrEnumerateSwapchainImages(p_swapchain, 0, &swapchain_length, nullptr);
 	if (XR_FAILED(result)) {
-		print_line("OpenXR: Failed to get swapchaim image count [", openxr_api->get_error_string(result), "]");
+		print_line("OpenXR: Failed to get swapchaim image count [", OpenXRAPI::get_singleton()->get_error_string(result), "]");
 		return false;
 	}
 
@@ -208,7 +196,7 @@ bool OpenXROpenGLExtension::get_swapchain_image_data(XrSwapchain p_swapchain, in
 
 	result = xrEnumerateSwapchainImages(p_swapchain, swapchain_length, &swapchain_length, (XrSwapchainImageBaseHeader *)images);
 	if (XR_FAILED(result)) {
-		print_line("OpenXR: Failed to get swapchaim images [", openxr_api->get_error_string(result), "]");
+		print_line("OpenXR: Failed to get swapchaim images [", OpenXRAPI::get_singleton()->get_error_string(result), "]");
 		memfree(images);
 		return false;
 	}
@@ -294,59 +282,7 @@ void OpenXROpenGLExtension::cleanup_swapchain_graphics_data(void **p_swapchain_g
 String OpenXROpenGLExtension::get_swapchain_format_name(int64_t p_swapchain_format) const {
 	// These are somewhat different per platform, will need to weed some stuff out...
 	switch (p_swapchain_format) {
-#ifdef WIN32
-		// using definitions from GLAD
-		ENUM_TO_STRING_CASE(GL_R8_SNORM)
-		ENUM_TO_STRING_CASE(GL_RG8_SNORM)
-		ENUM_TO_STRING_CASE(GL_RGB8_SNORM)
-		ENUM_TO_STRING_CASE(GL_RGBA8_SNORM)
-		ENUM_TO_STRING_CASE(GL_R16_SNORM)
-		ENUM_TO_STRING_CASE(GL_RG16_SNORM)
-		ENUM_TO_STRING_CASE(GL_RGB16_SNORM)
-		ENUM_TO_STRING_CASE(GL_RGBA16_SNORM)
-		ENUM_TO_STRING_CASE(GL_RGB4)
-		ENUM_TO_STRING_CASE(GL_RGB5)
-		ENUM_TO_STRING_CASE(GL_RGB8)
-		ENUM_TO_STRING_CASE(GL_RGB10)
-		ENUM_TO_STRING_CASE(GL_RGB12)
-		ENUM_TO_STRING_CASE(GL_RGB16)
-		ENUM_TO_STRING_CASE(GL_RGBA2)
-		ENUM_TO_STRING_CASE(GL_RGBA4)
-		ENUM_TO_STRING_CASE(GL_RGB5_A1)
-		ENUM_TO_STRING_CASE(GL_RGBA8)
-		ENUM_TO_STRING_CASE(GL_RGB10_A2)
-		ENUM_TO_STRING_CASE(GL_RGBA12)
-		ENUM_TO_STRING_CASE(GL_RGBA16)
-		ENUM_TO_STRING_CASE(GL_RGBA32F)
-		ENUM_TO_STRING_CASE(GL_RGB32F)
-		ENUM_TO_STRING_CASE(GL_RGBA16F)
-		ENUM_TO_STRING_CASE(GL_RGB16F)
-		ENUM_TO_STRING_CASE(GL_RGBA32UI)
-		ENUM_TO_STRING_CASE(GL_RGB32UI)
-		ENUM_TO_STRING_CASE(GL_RGBA16UI)
-		ENUM_TO_STRING_CASE(GL_RGB16UI)
-		ENUM_TO_STRING_CASE(GL_RGBA8UI)
-		ENUM_TO_STRING_CASE(GL_RGB8UI)
-		ENUM_TO_STRING_CASE(GL_RGBA32I)
-		ENUM_TO_STRING_CASE(GL_RGB32I)
-		ENUM_TO_STRING_CASE(GL_RGBA16I)
-		ENUM_TO_STRING_CASE(GL_RGB16I)
-		ENUM_TO_STRING_CASE(GL_RGBA8I)
-		ENUM_TO_STRING_CASE(GL_RGB8I)
-		ENUM_TO_STRING_CASE(GL_RGB10_A2UI)
-		ENUM_TO_STRING_CASE(GL_SRGB)
-		ENUM_TO_STRING_CASE(GL_SRGB8)
-		ENUM_TO_STRING_CASE(GL_SRGB_ALPHA)
-		ENUM_TO_STRING_CASE(GL_SRGB8_ALPHA8)
-		ENUM_TO_STRING_CASE(GL_DEPTH_COMPONENT16)
-		ENUM_TO_STRING_CASE(GL_DEPTH_COMPONENT24)
-		ENUM_TO_STRING_CASE(GL_DEPTH_COMPONENT32)
-		ENUM_TO_STRING_CASE(GL_DEPTH24_STENCIL8)
-		ENUM_TO_STRING_CASE(GL_R11F_G11F_B10F)
-		ENUM_TO_STRING_CASE(GL_DEPTH_COMPONENT32F)
-		ENUM_TO_STRING_CASE(GL_DEPTH32F_STENCIL8)
-
-#elif ANDROID_ENABLED
+#ifdef ANDROID_ENABLED
 		// using definitions from GLES3/gl3.h
 
 		ENUM_TO_STRING_CASE(GL_RGBA4)
@@ -418,44 +354,56 @@ String OpenXROpenGLExtension::get_swapchain_format_name(int64_t p_swapchain_form
 		ENUM_TO_STRING_CASE(GL_DEPTH24_STENCIL8)
 
 #else
-		// using definitions from GL/gl.h
-		ENUM_TO_STRING_CASE(GL_ALPHA4_EXT)
-		ENUM_TO_STRING_CASE(GL_ALPHA8_EXT)
-		ENUM_TO_STRING_CASE(GL_ALPHA12_EXT)
-		ENUM_TO_STRING_CASE(GL_ALPHA16_EXT)
-		ENUM_TO_STRING_CASE(GL_LUMINANCE4_EXT)
-		ENUM_TO_STRING_CASE(GL_LUMINANCE8_EXT)
-		ENUM_TO_STRING_CASE(GL_LUMINANCE12_EXT)
-		ENUM_TO_STRING_CASE(GL_LUMINANCE16_EXT)
-		ENUM_TO_STRING_CASE(GL_LUMINANCE4_ALPHA4_EXT)
-		ENUM_TO_STRING_CASE(GL_LUMINANCE6_ALPHA2_EXT)
-		ENUM_TO_STRING_CASE(GL_LUMINANCE8_ALPHA8_EXT)
-		ENUM_TO_STRING_CASE(GL_LUMINANCE12_ALPHA4_EXT)
-		ENUM_TO_STRING_CASE(GL_LUMINANCE12_ALPHA12_EXT)
-		ENUM_TO_STRING_CASE(GL_LUMINANCE16_ALPHA16_EXT)
-		ENUM_TO_STRING_CASE(GL_INTENSITY_EXT)
-		ENUM_TO_STRING_CASE(GL_INTENSITY4_EXT)
-		ENUM_TO_STRING_CASE(GL_INTENSITY8_EXT)
-		ENUM_TO_STRING_CASE(GL_INTENSITY12_EXT)
-		ENUM_TO_STRING_CASE(GL_INTENSITY16_EXT)
-		ENUM_TO_STRING_CASE(GL_RGB2_EXT)
-		ENUM_TO_STRING_CASE(GL_RGB4_EXT)
-		ENUM_TO_STRING_CASE(GL_RGB5_EXT)
-		ENUM_TO_STRING_CASE(GL_RGB8_EXT)
-		ENUM_TO_STRING_CASE(GL_RGB10_EXT)
-		ENUM_TO_STRING_CASE(GL_RGB12_EXT)
-		ENUM_TO_STRING_CASE(GL_RGB16_EXT)
-		ENUM_TO_STRING_CASE(GL_RGBA2_EXT)
-		ENUM_TO_STRING_CASE(GL_RGBA4_EXT)
-		ENUM_TO_STRING_CASE(GL_RGB5_A1_EXT)
-		ENUM_TO_STRING_CASE(GL_RGBA8_EXT)
-		ENUM_TO_STRING_CASE(GL_RGB10_A2_EXT)
-		ENUM_TO_STRING_CASE(GL_RGBA12_EXT)
-		ENUM_TO_STRING_CASE(GL_RGBA16_EXT)
-		ENUM_TO_STRING_CASE(GL_SRGB_EXT)
-		ENUM_TO_STRING_CASE(GL_SRGB8_EXT)
-		ENUM_TO_STRING_CASE(GL_SRGB_ALPHA_EXT)
-		ENUM_TO_STRING_CASE(GL_SRGB8_ALPHA8_EXT)
+		// using definitions from GLAD
+		ENUM_TO_STRING_CASE(GL_R8_SNORM)
+		ENUM_TO_STRING_CASE(GL_RG8_SNORM)
+		ENUM_TO_STRING_CASE(GL_RGB8_SNORM)
+		ENUM_TO_STRING_CASE(GL_RGBA8_SNORM)
+		ENUM_TO_STRING_CASE(GL_R16_SNORM)
+		ENUM_TO_STRING_CASE(GL_RG16_SNORM)
+		ENUM_TO_STRING_CASE(GL_RGB16_SNORM)
+		ENUM_TO_STRING_CASE(GL_RGBA16_SNORM)
+		ENUM_TO_STRING_CASE(GL_RGB4)
+		ENUM_TO_STRING_CASE(GL_RGB5)
+		ENUM_TO_STRING_CASE(GL_RGB8)
+		ENUM_TO_STRING_CASE(GL_RGB10)
+		ENUM_TO_STRING_CASE(GL_RGB12)
+		ENUM_TO_STRING_CASE(GL_RGB16)
+		ENUM_TO_STRING_CASE(GL_RGBA2)
+		ENUM_TO_STRING_CASE(GL_RGBA4)
+		ENUM_TO_STRING_CASE(GL_RGB5_A1)
+		ENUM_TO_STRING_CASE(GL_RGBA8)
+		ENUM_TO_STRING_CASE(GL_RGB10_A2)
+		ENUM_TO_STRING_CASE(GL_RGBA12)
+		ENUM_TO_STRING_CASE(GL_RGBA16)
+		ENUM_TO_STRING_CASE(GL_RGBA32F)
+		ENUM_TO_STRING_CASE(GL_RGB32F)
+		ENUM_TO_STRING_CASE(GL_RGBA16F)
+		ENUM_TO_STRING_CASE(GL_RGB16F)
+		ENUM_TO_STRING_CASE(GL_RGBA32UI)
+		ENUM_TO_STRING_CASE(GL_RGB32UI)
+		ENUM_TO_STRING_CASE(GL_RGBA16UI)
+		ENUM_TO_STRING_CASE(GL_RGB16UI)
+		ENUM_TO_STRING_CASE(GL_RGBA8UI)
+		ENUM_TO_STRING_CASE(GL_RGB8UI)
+		ENUM_TO_STRING_CASE(GL_RGBA32I)
+		ENUM_TO_STRING_CASE(GL_RGB32I)
+		ENUM_TO_STRING_CASE(GL_RGBA16I)
+		ENUM_TO_STRING_CASE(GL_RGB16I)
+		ENUM_TO_STRING_CASE(GL_RGBA8I)
+		ENUM_TO_STRING_CASE(GL_RGB8I)
+		ENUM_TO_STRING_CASE(GL_RGB10_A2UI)
+		ENUM_TO_STRING_CASE(GL_SRGB)
+		ENUM_TO_STRING_CASE(GL_SRGB8)
+		ENUM_TO_STRING_CASE(GL_SRGB_ALPHA)
+		ENUM_TO_STRING_CASE(GL_SRGB8_ALPHA8)
+		ENUM_TO_STRING_CASE(GL_DEPTH_COMPONENT16)
+		ENUM_TO_STRING_CASE(GL_DEPTH_COMPONENT24)
+		ENUM_TO_STRING_CASE(GL_DEPTH_COMPONENT32)
+		ENUM_TO_STRING_CASE(GL_DEPTH24_STENCIL8)
+		ENUM_TO_STRING_CASE(GL_R11F_G11F_B10F)
+		ENUM_TO_STRING_CASE(GL_DEPTH_COMPONENT32F)
+		ENUM_TO_STRING_CASE(GL_DEPTH32F_STENCIL8)
 #endif
 		default: {
 			return String("Swapchain format 0x") + String::num_int64(p_swapchain_format, 16);

@@ -58,7 +58,7 @@ namespace Godot
         /// </value>
         public real_t this[int index]
         {
-            get
+            readonly get
             {
                 switch (index)
                 {
@@ -97,27 +97,6 @@ namespace Godot
         }
 
         /// <summary>
-        /// Returns the length (magnitude) of the quaternion.
-        /// </summary>
-        /// <seealso cref="LengthSquared"/>
-        /// <value>Equivalent to <c>Mathf.Sqrt(LengthSquared)</c>.</value>
-        public real_t Length
-        {
-            get { return Mathf.Sqrt(LengthSquared); }
-        }
-
-        /// <summary>
-        /// Returns the squared length (squared magnitude) of the quaternion.
-        /// This method runs faster than <see cref="Length"/>, so prefer it if
-        /// you need to compare quaternions or need the squared length for some formula.
-        /// </summary>
-        /// <value>Equivalent to <c>Dot(this)</c>.</value>
-        public real_t LengthSquared
-        {
-            get { return Dot(this); }
-        }
-
-        /// <summary>
         /// Returns the angle between this quaternion and <paramref name="to"/>.
         /// This is the magnitude of the angle you would need to rotate
         /// by to get from one to the other.
@@ -128,7 +107,7 @@ namespace Godot
         /// </summary>
         /// <param name="to">The other quaternion.</param>
         /// <returns>The angle between the quaternions.</returns>
-        public real_t AngleTo(Quaternion to)
+        public readonly real_t AngleTo(Quaternion to)
         {
             real_t dot = Dot(to);
             return Mathf.Acos(Mathf.Clamp(dot * dot * 2 - 1, -1, 1));
@@ -143,7 +122,7 @@ namespace Godot
         /// <param name="postB">A quaternion after <paramref name="b"/>.</param>
         /// <param name="weight">A value on the range of 0.0 to 1.0, representing the amount of interpolation.</param>
         /// <returns>The interpolated quaternion.</returns>
-        public Quaternion SphericalCubicInterpolate(Quaternion b, Quaternion preA, Quaternion postB, real_t weight)
+        public readonly Quaternion SphericalCubicInterpolate(Quaternion b, Quaternion preA, Quaternion postB, real_t weight)
         {
 #if DEBUG
             if (!IsNormalized())
@@ -194,7 +173,7 @@ namespace Godot
                 0);
             Quaternion q2 = toQ * ln.Exp();
 
-            // To cancel error made by Expmap ambiguity, do blends.
+            // To cancel error made by Expmap ambiguity, do blending.
             return q1.Slerp(q2, weight);
         }
 
@@ -212,7 +191,7 @@ namespace Godot
         /// <param name="preAT"></param>
         /// <param name="postBT"></param>
         /// <returns>The interpolated quaternion.</returns>
-        public Quaternion SphericalCubicInterpolateInTime(Quaternion b, Quaternion preA, Quaternion postB, real_t weight, real_t bT, real_t preAT, real_t postBT)
+        public readonly Quaternion SphericalCubicInterpolateInTime(Quaternion b, Quaternion preA, Quaternion postB, real_t weight, real_t bT, real_t preAT, real_t postBT)
         {
 #if DEBUG
             if (!IsNormalized())
@@ -263,7 +242,7 @@ namespace Godot
                 0);
             Quaternion q2 = toQ * ln.Exp();
 
-            // To cancel error made by Expmap ambiguity, do blends.
+            // To cancel error made by Expmap ambiguity, do blending.
             return q1.Slerp(q2, weight);
         }
 
@@ -272,12 +251,12 @@ namespace Godot
         /// </summary>
         /// <param name="b">The other quaternion.</param>
         /// <returns>The dot product.</returns>
-        public real_t Dot(Quaternion b)
+        public readonly real_t Dot(Quaternion b)
         {
             return (x * b.x) + (y * b.y) + (z * b.z) + (w * b.w);
         }
 
-        public Quaternion Exp()
+        public readonly Quaternion Exp()
         {
             Vector3 v = new Vector3(x, y, z);
             real_t theta = v.Length();
@@ -289,12 +268,12 @@ namespace Godot
             return new Quaternion(v, theta);
         }
 
-        public real_t GetAngle()
+        public readonly real_t GetAngle()
         {
             return 2 * Mathf.Acos(w);
         }
 
-        public Vector3 GetAxis()
+        public readonly Vector3 GetAxis()
         {
             if (Mathf.Abs(w) > 1 - Mathf.Epsilon)
             {
@@ -312,7 +291,7 @@ namespace Godot
         /// the rotation angles in the format (X angle, Y angle, Z angle).
         /// </summary>
         /// <returns>The Euler angle representation of this quaternion.</returns>
-        public Vector3 GetEuler(EulerOrder order = EulerOrder.Yxz)
+        public readonly Vector3 GetEuler(EulerOrder order = EulerOrder.Yxz)
         {
 #if DEBUG
             if (!IsNormalized())
@@ -328,7 +307,7 @@ namespace Godot
         /// Returns the inverse of the quaternion.
         /// </summary>
         /// <returns>The inverse quaternion.</returns>
-        public Quaternion Inverse()
+        public readonly Quaternion Inverse()
         {
 #if DEBUG
             if (!IsNormalized())
@@ -340,27 +319,58 @@ namespace Godot
         }
 
         /// <summary>
+        /// Returns <see langword="true"/> if this quaternion is finite, by calling
+        /// <see cref="Mathf.IsFinite"/> on each component.
+        /// </summary>
+        /// <returns>Whether this vector is finite or not.</returns>
+        public readonly bool IsFinite()
+        {
+            return Mathf.IsFinite(x) && Mathf.IsFinite(y) && Mathf.IsFinite(z) && Mathf.IsFinite(w);
+        }
+
+        /// <summary>
         /// Returns whether the quaternion is normalized or not.
         /// </summary>
         /// <returns>A <see langword="bool"/> for whether the quaternion is normalized or not.</returns>
-        public bool IsNormalized()
+        public readonly bool IsNormalized()
         {
-            return Mathf.Abs(LengthSquared - 1) <= Mathf.Epsilon;
+            return Mathf.Abs(LengthSquared() - 1) <= Mathf.Epsilon;
         }
 
-        public Quaternion Log()
+        public readonly Quaternion Log()
         {
             Vector3 v = GetAxis() * GetAngle();
             return new Quaternion(v.x, v.y, v.z, 0);
         }
 
         /// <summary>
+        /// Returns the length (magnitude) of the quaternion.
+        /// </summary>
+        /// <seealso cref="LengthSquared"/>
+        /// <value>Equivalent to <c>Mathf.Sqrt(LengthSquared)</c>.</value>
+        public readonly real_t Length()
+        {
+            return Mathf.Sqrt(LengthSquared());
+        }
+
+        /// <summary>
+        /// Returns the squared length (squared magnitude) of the quaternion.
+        /// This method runs faster than <see cref="Length"/>, so prefer it if
+        /// you need to compare quaternions or need the squared length for some formula.
+        /// </summary>
+        /// <value>Equivalent to <c>Dot(this)</c>.</value>
+        public readonly real_t LengthSquared()
+        {
+            return Dot(this);
+        }
+
+        /// <summary>
         /// Returns a copy of the quaternion, normalized to unit length.
         /// </summary>
         /// <returns>The normalized quaternion.</returns>
-        public Quaternion Normalized()
+        public readonly Quaternion Normalized()
         {
-            return this / Length;
+            return this / Length();
         }
 
         /// <summary>
@@ -372,7 +382,7 @@ namespace Godot
         /// <param name="to">The destination quaternion for interpolation. Must be normalized.</param>
         /// <param name="weight">A value on the range of 0.0 to 1.0, representing the amount of interpolation.</param>
         /// <returns>The resulting quaternion of the interpolation.</returns>
-        public Quaternion Slerp(Quaternion to, real_t weight)
+        public readonly Quaternion Slerp(Quaternion to, real_t weight)
         {
 #if DEBUG
             if (!IsNormalized())
@@ -437,7 +447,7 @@ namespace Godot
         /// <param name="to">The destination quaternion for interpolation. Must be normalized.</param>
         /// <param name="weight">A value on the range of 0.0 to 1.0, representing the amount of interpolation.</param>
         /// <returns>The resulting quaternion of the interpolation.</returns>
-        public Quaternion Slerpni(Quaternion to, real_t weight)
+        public readonly Quaternion Slerpni(Quaternion to, real_t weight)
         {
 #if DEBUG
             if (!IsNormalized())
@@ -532,14 +542,13 @@ namespace Godot
             }
             else
             {
-                real_t sinAngle = Mathf.Sin(angle * 0.5f);
-                real_t cosAngle = Mathf.Cos(angle * 0.5f);
-                real_t s = sinAngle / d;
+                (real_t sin, real_t cos) = Mathf.SinCos(angle * 0.5f);
+                real_t s = sin / d;
 
                 x = axis.x * s;
                 y = axis.y * s;
                 z = axis.z * s;
-                w = cosAngle;
+                w = cos;
             }
         }
 
@@ -583,12 +592,9 @@ namespace Godot
             // Conversion to quaternion as listed in https://ntrs.nasa.gov/archive/nasa/casi.ntrs.nasa.gov/19770024290.pdf (page A-6)
             // a3 is the angle of the first rotation, following the notation in this reference.
 
-            real_t cosA1 = Mathf.Cos(halfA1);
-            real_t sinA1 = Mathf.Sin(halfA1);
-            real_t cosA2 = Mathf.Cos(halfA2);
-            real_t sinA2 = Mathf.Sin(halfA2);
-            real_t cosA3 = Mathf.Cos(halfA3);
-            real_t sinA3 = Mathf.Sin(halfA3);
+            (real_t sinA1, real_t cosA1) = Mathf.SinCos(halfA1);
+            (real_t sinA2, real_t cosA2) = Mathf.SinCos(halfA2);
+            (real_t sinA3, real_t cosA3) = Mathf.SinCos(halfA3);
 
             return new Quaternion(
                 (sinA1 * cosA2 * sinA3) + (cosA1 * sinA2 * cosA3),
@@ -762,7 +768,7 @@ namespace Godot
         /// </summary>
         /// <param name="obj">The other object to compare.</param>
         /// <returns>Whether or not the quaternion and the other object are exactly equal.</returns>
-        public override bool Equals(object obj)
+        public override readonly bool Equals(object obj)
         {
             return obj is Quaternion other && Equals(other);
         }
@@ -772,7 +778,7 @@ namespace Godot
         /// </summary>
         /// <param name="other">The other quaternion to compare.</param>
         /// <returns>Whether or not the quaternions are exactly equal.</returns>
-        public bool Equals(Quaternion other)
+        public readonly bool Equals(Quaternion other)
         {
             return x == other.x && y == other.y && z == other.z && w == other.w;
         }
@@ -783,7 +789,7 @@ namespace Godot
         /// </summary>
         /// <param name="other">The other quaternion to compare.</param>
         /// <returns>Whether or not the quaternions are approximately equal.</returns>
-        public bool IsEqualApprox(Quaternion other)
+        public readonly bool IsEqualApprox(Quaternion other)
         {
             return Mathf.IsEqualApprox(x, other.x) && Mathf.IsEqualApprox(y, other.y) && Mathf.IsEqualApprox(z, other.z) && Mathf.IsEqualApprox(w, other.w);
         }
@@ -792,7 +798,7 @@ namespace Godot
         /// Serves as the hash function for <see cref="Quaternion"/>.
         /// </summary>
         /// <returns>A hash code for this quaternion.</returns>
-        public override int GetHashCode()
+        public override readonly int GetHashCode()
         {
             return y.GetHashCode() ^ x.GetHashCode() ^ z.GetHashCode() ^ w.GetHashCode();
         }
@@ -801,7 +807,7 @@ namespace Godot
         /// Converts this <see cref="Quaternion"/> to a string.
         /// </summary>
         /// <returns>A string representation of this quaternion.</returns>
-        public override string ToString()
+        public override readonly string ToString()
         {
             return $"({x}, {y}, {z}, {w})";
         }
@@ -810,7 +816,7 @@ namespace Godot
         /// Converts this <see cref="Quaternion"/> to a string with the given <paramref name="format"/>.
         /// </summary>
         /// <returns>A string representation of this quaternion.</returns>
-        public string ToString(string format)
+        public readonly string ToString(string format)
         {
             return $"({x.ToString(format)}, {y.ToString(format)}, {z.ToString(format)}, {w.ToString(format)})";
         }
